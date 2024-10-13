@@ -32,3 +32,4 @@ coverage
 
 /.venv/
 /.python-version
+/package-lock.json
