@@ -5,6 +5,6 @@ app = FastAPI()
 
 # Подключение роутеров
 app.include_router(telemetry.router)
-app.include_router(video.router)
-app.include_router(controller.router)
-app.include_router(ml_model.router)
+# app.include_router(video.router)
+# app.include_router(controller.router)
+# app.include_router(ml_model.router)

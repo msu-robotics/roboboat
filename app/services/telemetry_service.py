@@ -1,29 +1,73 @@
 import asyncio
 from fastapi import WebSocket
+from app.models.schema import (
+    Telemetry,
+    ThrustersTelemetry,
+    PowerTelemetry,
+    MagnetometerTelemetry,
+)
+from loguru import logger
+from app.services.controller_service import VehicleController
 
 
 class TelemetryService:
-    def __init__(self):
+    def __init__(self, vehicle: VehicleController):
         # Инициализация необходимых переменных
-        self._telemetry_data = {}
+        self._telemetry_data = Telemetry(
+            magnetometer=MagnetometerTelemetry(pitch=0, yaw=0, roll=0),
+            thrusters=ThrustersTelemetry(
+                forward_left=0, forward_right=0, backward_left=0, backward_right=0
+            ),
+            power=PowerTelemetry(voltage=0, current=0),
+        )
+        self._vehicle = vehicle
+        self._pid_settings = {"p_gain": 0, "i_gain": 0, "d_gain": 0}
 
-    def get_current_data(self):
+    def update_telemetry(self):
         """
         Получение текущих телеметрических данных.
         """
+        self._telemetry_data = Telemetry(
+            magnetometer=MagnetometerTelemetry(
+                **self._vehicle.get_magnetometer_telemetry()
+            ),
+            thrusters=ThrustersTelemetry(
+                **dict(
+                    zip(
+                        [
+                            "forward_left",
+                            "forward_right",
+                            "backward_left",
+                            "backward_right",
+                        ],
+                        self._vehicle.get_pwm_telemetry(),
+                    )
+                )
+            ),
+            power=PowerTelemetry(voltage=0, current=0),
+        )
         return self._telemetry_data
+
+    async def refresh_pid_settings(self):
+        self._pid_settings = await self._vehicle.refresh_pid_settings()
+
+    def get_pid_settings(self):
+        return self._vehicle.get_pid_settings()
 
     async def websocket_endpoint(self, websocket: WebSocket):
         """
         Обработка веб-сокета для передачи данных в реальном времени.
         """
+        logger.info("Connection try to accept")
         await websocket.accept()
+        logger.info("Connection accepted")
         try:
             while True:
                 # Отправка данных через веб-сокет
-                await websocket.send_json(self._telemetry_data)
-                await asyncio.sleep(1)  # Задержка между сообщениями
-        except Exception as e:
-            print(f"WebSocket error: {e}")
+                telemetry = self.update_telemetry()
+                await websocket.send_json(telemetry.dict())
+                await asyncio.sleep(0.1)  # Задержка между сообщениями
+        except Exception:
+            logger.exception(f"Connection closed")
         finally:
             await websocket.close()
