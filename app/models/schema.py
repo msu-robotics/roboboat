@@ -18,14 +18,13 @@ class PowerTelemetry(BaseModel):
     current: float
 
 
-class ThrustersTelemetry(BaseModel):
-    forward_left: float
-    forward_right: float
-    backward_left: float
-    backward_right: float
-
-
 class Telemetry(BaseModel):
     magnetometer: MagnetometerTelemetry
     power: PowerTelemetry
-    thrusters: ThrustersTelemetry
+    thrusters: list[float]
+
+
+class PIDSettings(BaseModel):
+    kp: float
+    ki: float
+    kd: float

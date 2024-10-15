@@ -2,12 +2,11 @@ import asyncio
 from fastapi import WebSocket
 from app.models.schema import (
     Telemetry,
-    ThrustersTelemetry,
     PowerTelemetry,
     MagnetometerTelemetry,
 )
 from loguru import logger
-from app.services.controller_service import VehicleController
+from app.vechicle import VehicleController
 
 
 class TelemetryService:
@@ -15,9 +14,7 @@ class TelemetryService:
         # Инициализация необходимых переменных
         self._telemetry_data = Telemetry(
             magnetometer=MagnetometerTelemetry(pitch=0, yaw=0, roll=0),
-            thrusters=ThrustersTelemetry(
-                forward_left=0, forward_right=0, backward_left=0, backward_right=0
-            ),
+            thrusters=[0, 0, 0, 0],
             power=PowerTelemetry(voltage=0, current=0),
         )
         self._vehicle = vehicle
@@ -31,19 +28,7 @@ class TelemetryService:
             magnetometer=MagnetometerTelemetry(
                 **self._vehicle.get_magnetometer_telemetry()
             ),
-            thrusters=ThrustersTelemetry(
-                **dict(
-                    zip(
-                        [
-                            "forward_left",
-                            "forward_right",
-                            "backward_left",
-                            "backward_right",
-                        ],
-                        self._vehicle.get_pwm_telemetry(),
-                    )
-                )
-            ),
+            thrusters=self._vehicle.get_pwm_telemetry(),
             power=PowerTelemetry(voltage=0, current=0),
         )
         return self._telemetry_data

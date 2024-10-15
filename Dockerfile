@@ -47,7 +47,7 @@ COPY ./app ./app
 # Открываем порт для доступа
 EXPOSE 5000
 
-ENV vehicle_host "192.168.43.9"
+ENV vehicle_host "192.168.43.8"
 ENV vehicle_port 5000
 
 # Запускаем приложение

@@ -54,7 +54,7 @@ class VehicleController:
             "roll": 0.0,
             "yaw": 0.0,
         }
-        self._thrusters: list[int] = [0, 0, 0, 0]
+        self._pwm: list[int] = [0, 0, 0, 0]
 
         # Инициализация WebSocket соединения с контроллером лодки
         self._telemetry_connection = None
@@ -71,25 +71,28 @@ class VehicleController:
         return self._magnetometer
 
     def get_pwm_telemetry(self) -> dict:
-        return self._thrusters
+        return self._pwm
 
     async def refresh_pid_settings(self) -> dict:
         while not self._http_session:
             await asyncio.sleep(0.1)
 
-        async with self._http_session.get(
-            f"http://{self._host}:{self._port}/pid_settings"
-        ) as resp:
-            pid_settings = await resp.json()
-            logger.debug(f"Получены настройки pid регулятора {pid_settings}")
-            self._yaw_pid_p = pid_settings.get("pGain")
-            self._yaw_pid_i = pid_settings.get("iGain")
-            self._yaw_pid_d = pid_settings.get("dGain")
-        return {
-            "p_gain": self._yaw_pid_p,
-            "i_gain": self._yaw_pid_i,
-            "d_gain": self._yaw_pid_d,
-        }
+        try:
+            async with self._http_session.get(
+                f"http://{self._host}:{self._port}/pid_settings"
+            ) as resp:
+                pid_settings = await resp.json()
+                logger.info(f"Получены настройки pid регулятора {pid_settings}")
+                self._yaw_pid_p = pid_settings.get("pGain")
+                self._yaw_pid_i = pid_settings.get("iGain")
+                self._yaw_pid_d = pid_settings.get("dGain")
+            return {
+                "p_gain": self._yaw_pid_p,
+                "i_gain": self._yaw_pid_i,
+                "d_gain": self._yaw_pid_d,
+            }
+        except Exception as e:
+            logger.error(e)
 
     def get_pid_settings(self) -> dict:
         return {
@@ -175,6 +178,24 @@ class VehicleController:
         :param mode: Строка, обозначающая режим ('manual', 'auto', и т.д.)
         """
         self._mode = mode
+
+    async def set_pid_settings(self, p: float, i: float, d: float):
+        data = {
+            "pGain": p,
+            "iGain": i,
+            "dGain": d,
+        }
+
+        async with self._http_session.post(
+                f"http://{self._host}:{self._port}/pid_settings", json=data) as resp:
+            if resp.status == 200:
+                logger.info("PID settings updated successfully")
+            else:
+                logger.exception(f"Failed to send PID settings. Status code: {resp.status}")
+
+        self._yaw_pid_p = p
+        self._yaw_pid_i = i
+        self._yaw_pid_d = d
 
     async def set_motors(
         self, forward: float, lateral: float, yaw: float, speed: float
