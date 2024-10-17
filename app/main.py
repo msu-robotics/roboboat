@@ -7,7 +7,7 @@ import uvicorn
 from websockets.asyncio.async_timeout import timeout
 
 from boat_controller import BoatController
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -20,6 +20,15 @@ app = FastAPI()
 ESP32_IP = '192.168.43.222'
 boat_controller = BoatController(esp32_ip=ESP32_IP)
 boat_controller.start()
+
+# Путь для сохранения файлов миссий
+MISSION_FOLDER = 'missions'
+os.makedirs(MISSION_FOLDER, exist_ok=True)
+
+# Глобальные переменные для управления миссией
+mission_thread = None
+mission_running = False
+mission_output = []
 
 
 # Маршрут для получения телеметрии
@@ -124,6 +133,76 @@ async def get_pid_settings(request: Request):
         i = boat_controller.telemetry_data['pid']['i'],
         d = boat_controller.telemetry_data['pid']['d']
     )
+
+# Функция для логирования вывода миссии
+def log_mission_output(message):
+    global mission_output
+    mission_output.append(message)
+    # Ограничиваем размер лога, чтобы не переполнить память
+    if len(mission_output) > 1000:
+        mission_output = mission_output[-1000:]
+
+# Конечная точка для загрузки файла миссии
+@app.post("/upload_mission")
+async def upload_mission(mission_file: UploadFile = File(...)):
+    if mission_file.filename.endswith('.py'):
+        contents = await mission_file.read()
+        filepath = os.path.join(MISSION_FOLDER, 'mission.py')
+        with open(filepath, 'wb') as f:
+            f.write(contents)
+        return JSONResponse(content={"status": "success"}, status_code=200)
+    else:
+        return JSONResponse(content={"status": "error", "message": "Invalid file type"}, status_code=400)
+
+# Конечная точка для запуска миссии
+@app.post("/start_mission")
+async def start_mission():
+    global mission_thread, mission_running, mission_output
+    if mission_running:
+        return JSONResponse(content={"status": "error", "message": "Mission is already running"}, status_code=400)
+    mission_output = []  # Очищаем предыдущий вывод
+    try:
+        mission_running = True
+        # Динамическая загрузка файла миссии
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("mission_module", os.path.join(MISSION_FOLDER, 'mission.py'))
+        mission_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mission_module)
+        mission_instance = mission_module.Mission(boat_controller, mission_running, log_mission_output)
+        mission_thread = threading.Thread(target=mission_instance.run)
+        mission_thread.start()
+        return JSONResponse(content={"status": "success"}, status_code=200)
+    except Exception as e:
+
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+
+# Конечная точка для остановки миссии
+@app.post("/stop_mission")
+async def stop_mission():
+    global mission_running
+    if mission_running:
+        mission_running = False
+        return JSONResponse(content={"status": "success"}, status_code=200)
+    else:
+        return JSONResponse(content={"status": "error", "message": "No mission is running"}, status_code=400)
+
+# WebSocket для передачи вывода миссии на клиент
+from fastapi import WebSocket
+
+@app.websocket("/mission_output")
+async def mission_output_ws(websocket: WebSocket):
+    await websocket.accept()
+    last_index = 0
+    try:
+        while True:
+            if mission_output:
+                new_output = mission_output[last_index:]
+                for line in new_output:
+                    await websocket.send_text(line)
+                last_index = len(mission_output)
+            await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        print("Клиент отключился от mission_output_ws")
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

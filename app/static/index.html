@@ -115,6 +115,46 @@
             color: #007BFF;
         }
 
+        /* Стили для кнопок управления миссией */
+        #startMissionBtn, #stopMissionBtn, #uploadMissionBtn {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #28a745; /* Зеленый цвет для кнопок */
+            color: #fff;
+            transition: background-color 0.3s;
+        }
+
+        #startMissionBtn:hover, #uploadMissionBtn:hover {
+            background-color: #218838;
+        }
+
+        #stopMissionBtn {
+            background-color: #dc3545; /* Красный цвет для кнопки остановки */
+        }
+
+        #stopMissionBtn:hover {
+            background-color: #c82333;
+        }
+
+        /* Стили для области вывода миссии */
+        #missionOutput {
+            font-size: 14px;
+            color: #333;
+        }
+
+        #missionOutput h3 {
+            margin-top: 0;
+        }
+
+        .mission-control-section {
+            flex: 2 1 600px;
+            max-width: 1000px; /* Максимальная ширина, можете настроить по необходимости */
+        }
+
         /* Styles for the mode switcher */
         #modeSwitch {
             margin-top: 20px;
@@ -230,6 +270,13 @@
         }
 
 
+        @media only screen and (max-width: 800px) {
+            .mission-control-section {
+                flex: 1 1 100%;
+                max-width: 100%;
+            }
+        }
+
         /* Responsive styles for mobile devices */
         @media only screen and (max-width: 600px) {
             #top-bar h1 {
@@ -303,6 +350,22 @@
             <div style="margin-top: 10px;">
                 <label for="probeTimeout">Таймаут (секунды):</label>
                 <input type="number" id="probeTimeout" min="1" max="60" value="10" step="1">
+            </div>
+        </div>
+
+        <!-- Добавляем новую секцию для управления миссией -->
+        <div class="control-section mission-control-section">
+            <h2>Управление миссией</h2>
+            <div>
+                <button id="startMissionBtn" onclick="startMission()">Запустить миссию</button>
+                <button id="stopMissionBtn" onclick="stopMission()">Остановить миссию</button>
+                <button id="uploadMissionBtn" onclick="document.getElementById('missionFileInput').click()">Загрузить миссию</button>
+                <input type="file" id="missionFileInput" style="display: none;" accept=".py" onchange="uploadMissionFile()">
+            </div>
+            <!-- Добавляем область для отображения stdout выполнения миссии -->
+            <div id="missionOutput" style="margin-top: 20px; height: 200px; overflow-y: scroll; background-color: #f9f9f9; border: 1px solid #ccc; padding: 10px;">
+                <h3>Вывод выполнения миссии:</h3>
+                <pre id="missionStdout" style="white-space: pre-wrap;"></pre>
             </div>
         </div>
 
@@ -432,6 +495,111 @@
             lastJoystickSendTime = now;
         }
     }
+
+    // Функция для загрузки файла миссии
+    function uploadMissionFile() {
+        let fileInput = document.getElementById('missionFileInput');
+        let file = fileInput.files[0];
+        if (file) {
+            let formData = new FormData();
+            formData.append('mission_file', file);
+
+            fetch('/upload_mission', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Файл миссии загружен успешно.');
+                } else {
+                    alert('Ошибка при загрузке файла миссии.');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка при загрузке файла миссии.');
+            });
+        }
+    }
+
+    // Функция для запуска миссии
+    function startMission() {
+        fetch('/start_mission', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Миссия запущена.');
+                // Отключаем ручное управление
+                disableManualControl(true);
+                // Запускаем получение вывода миссии
+                startMissionOutput();
+            } else {
+                alert('Ошибка при запуске миссии.');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Ошибка при запуске миссии.');
+        });
+    }
+
+    // Функция для остановки миссии
+    function stopMission() {
+        fetch('/stop_mission', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Миссия остановлена.');
+                // Включаем ручное управление
+                disableManualControl(false);
+                // Останавливаем получение вывода миссии
+                stopMissionOutput();
+            } else {
+                alert('Ошибка при остановке миссии.');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Ошибка при остановке миссии.');
+        });
+    }
+
+    // Функция для отключения/включения ручного управления
+    function disableManualControl(disable) {
+        document.getElementById('joystick').style.pointerEvents = disable ? 'none' : 'auto';
+        document.getElementById('yawJoystick').style.pointerEvents = disable ? 'none' : 'auto';
+        document.getElementById('manualModeBtn').disabled = disable;
+        document.getElementById('stabilizationModeBtn').disabled = disable;
+        // Добавьте отключение других элементов управления, если необходимо
+    }
+
+    let missionOutputWs;
+    function startMissionOutput() {
+        missionOutputWs = new WebSocket('ws://' + window.location.host + '/mission_output');
+        missionOutputWs.onmessage = function(event) {
+            let stdoutElement = document.getElementById('missionStdout');
+            stdoutElement.textContent += event.data + '\n';
+            stdoutElement.scrollTop = stdoutElement.scrollHeight; // Автопрокрутка вниз
+        };
+        missionOutputWs.onclose = function(event) {
+            console.log('WebSocket mission_output закрыт:', event);
+        };
+        missionOutputWs.onerror = function(error) {
+            console.error('WebSocket mission_output ошибка:', error);
+        };
+    }
+
+
+        function stopMissionOutput() {
+            if (missionOutputWs) {
+                missionOutputWs.close();
+                missionOutputWs = null;
+            }
+            // Очистить вывод миссии, если необходимо
+            // document.getElementById('missionStdout').textContent = '';
+        }
 
     // Функция для управления пробоотборником
     function moveProbe(direction) {
