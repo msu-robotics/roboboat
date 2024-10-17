@@ -63,15 +63,6 @@
             color: #333;
         }
 
-        #videoStream {
-            width: 100%;
-            height: auto;
-            max-width: 100%;
-            background: black;
-            border-radius: 10px;
-            margin-top: 20px;
-        }
-
         #joystick, #yawJoystick {
             border: 5px solid #888;
             border-radius: 50%;
@@ -263,7 +254,7 @@
     <div id="controls">
         <!-- Speed multiplier slider and mode switcher section -->
         <div class="control-section">
-            <h2>Set Speed Multiplier</h2>
+            <h2>Настройка скорости</h2>
             <input type="range" id="speedSlider" min="0" max="100" value="100" onchange="updateSpeed()"><br>
             <span id="sliderValue">100</span>%
             <!-- Mode switcher -->
@@ -273,14 +264,9 @@
             </div>
         </div>
 
-        <div class="control-section">
-            <h2>Live Video Stream</h2>
-            <video id="videoStream" autoplay playsinline></video>
-        </div>
-
         <!-- PID Controller Settings Section -->
         <div class="control-section">
-            <h2>PID Controller Settings</h2>
+            <h2>Настройка PID регулятора</h2>
             <div class="pid-control">
                 <label for="pGain">Proportional Gain (P):</label>
                 <input type="range" id="pGainSlider" min="0" max="30" value="5" step="0.5" onchange="syncPIDInput('P')">
@@ -306,7 +292,7 @@
 
         <!-- Joystick section -->
         <div class="control-section">
-            <h2>Joystick Control</h2>
+            <h2>Ручное управление</h2>
             <canvas id="joystick" width="300" height="300"></canvas>
             <!-- Yaw control joystick -->
             <h3>Yaw Control</h3>
@@ -315,7 +301,7 @@
 
         <!-- Magnetometer section -->
         <div class="control-section">
-            <h2>Magnetometer Visualization</h2>
+            <h2>Компас</h2>
             <canvas id="magnetometerCanvas" width="300" height="300"></canvas>
             <!-- Element to display heading value -->
             <div id="headingValue" style="margin-top: 10px; font-size: 18px; color: #333;"></div>
@@ -335,9 +321,8 @@
 </div>
 
 <script>
-    let videoElement = document.getElementById('videoStream');
-    let control_ws = new WebSocket('ws://' + window.location.host + '/control/');
-    let telemetry_ws = new WebSocket('ws://' + window.location.host + '/telemetry/');
+    let control_ws = new WebSocket('ws://' + window.location.host + '/control');
+    let telemetry_ws = new WebSocket('ws://' + window.location.host + '/telemetry');
     let joystick = document.getElementById("joystick");
     let ctx = joystick.getContext("2d");
 
@@ -411,37 +396,10 @@
         control_ws.send(JSON.stringify({speedMultiplier: speedMultiplier}));
     }
 
-    async function startWebRTC() {
-        const pc = new RTCPeerConnection();
-
-        // Получаем медиапоток с сервера через WebRTC
-        pc.ontrack = function(event) {
-            videoElement.srcObject = event.streams[0];
-        };
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        // Отправляем SDP offer на сервер FastAPI
-        const response = await fetch('/video/offer', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                sdp: pc.localDescription.sdp,
-                type: pc.localDescription.type
-            })
-        });
-
-        const answer = await response.json();
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
-    }
-
     // Функция для загрузки настроек PID-регулятора при загрузке страницы
     async function loadPIDSettings() {
         try {
-            const response = await fetch('/telemetry/pid_settings');
+            const response = await fetch('/pid_settings');
             if (response.ok) {
                 const data = await response.json();
                 pGain = parseFloat(data.p_gain);
@@ -524,7 +482,7 @@
     function savePIDSettings() {
         const pidSettings = {kp: pGain, ki: iGain, kd: dGain};
 
-        fetch('/telemetry/pid_settings', {
+        fetch('/pid_settings', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -756,7 +714,7 @@
         let data = JSON.parse(event.data);
 
         // Получаем значение mx
-        let mx = data.magnetometer && data.magnetometer.yaw;
+        let mx = data && data.yaw;
 
         // Сохраняем текущее значение mx
         currentMx = mx;
@@ -764,8 +722,8 @@
         updateMagnetometer(mx);
 
         // Обновляем значения ШИМ
-        if (data.thrusters && Array.isArray(data.thrusters)) {
-            updatePWMValues(data.thrusters);
+        if (data.motor_pwms && Array.isArray(data.motor_pwms)) {
+            updatePWMValues(data.motor_pwms);
         }
     };
 
@@ -925,8 +883,6 @@
 
     // Запускаем таймер для отправки данных джойстика с заданной частотой
     setInterval(sendJoystickData, joystickInterval);
-    // Запуск WebRTC стрима при загрузке страницы
-    window.addEventListener('load', startWebRTC);
 </script>
 </body>
 </html>
