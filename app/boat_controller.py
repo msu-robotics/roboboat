@@ -21,7 +21,7 @@ PID_CMD_STRUCT = 'Bfff'
 
 # Данные телеметрии: заголовок (1 байт) + roll (float) + pitch (float) + yaw (float) + adc_value (float)
 # + pwm двигателей (float * 4)
-TELEMETRY_STRUCT = 'Bffffffff'  # B: unsigned char, f: float
+TELEMETRY_STRUCT = 'Bfffffffffff'  # B: unsigned char, f: float
 
 # Команда LED: заголовок (1 байт) + режим (1 байт) + R (1 байт) + G (1 байт) + B (1 байт)
 LED_CMD_STRUCT = 'BBBBB'  # B: unsigned char
@@ -62,7 +62,8 @@ class BoatController:
             'pitch': 0.0,
             'yaw': 0.0,
             'adc_value': 0.0,
-            'motor_pwms': [0.0, 0.0, 0.0, 0.0]
+            'motor_pwms': [0.0, 0.0, 0.0, 0.0],
+            'pid': {'p': 0, 'i': 0, 'd': 0}
         }
 
         # Хранение текущих скоростей движения
@@ -168,13 +169,14 @@ class BoatController:
         """
         try:
             unpacked = struct.unpack(TELEMETRY_STRUCT, packet)
-            _, roll, pitch, yaw, adc_value, motor1_pwm, motor2_pwm, motor3_pwm, motor4_pwm = unpacked
+            _, roll, pitch, yaw, adc_value, motor1_pwm, motor2_pwm, motor3_pwm, motor4_pwm, kp, ki, kd = unpacked
             telemetry = {
                 'roll': roll,
                 'pitch': pitch,
                 'yaw': yaw,
                 'adc_value': adc_value,
-                'motor_pwms': [motor1_pwm, motor2_pwm, motor3_pwm, motor4_pwm]
+                'motor_pwms': [motor1_pwm, motor2_pwm, motor3_pwm, motor4_pwm],
+                'pid': {'p': kp, 'i': ki, 'd': kd}
             }
             return telemetry
         except Exception as e:

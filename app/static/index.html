@@ -402,9 +402,9 @@
             const response = await fetch('/pid_settings');
             if (response.ok) {
                 const data = await response.json();
-                pGain = parseFloat(data.p_gain);
-                iGain = parseFloat(data.i_gain);
-                dGain = parseFloat(data.d_gain);
+                pGain = parseFloat(data.p);
+                iGain = parseFloat(data.i);
+                dGain = parseFloat(data.d);
 
                 // Обновляем слайдеры и поля ввода
                 document.getElementById('pGainSlider').value = pGain;
@@ -425,7 +425,36 @@
     function setMode(mode) {
         currentMode = mode;
         updateModeButtons();
-        control_ws.send(JSON.stringify({mode: currentMode}));
+
+        fetch('/mode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({'mode': currentMode})
+        })
+            .then(response => {
+                if (response.ok) {
+
+                } else {
+                    alert('Ошибка переключения режима стабилизации');
+                    if (currentMode === 'manual') {
+                        currentMode = 'stabilization';
+                    } else {
+                        currentMode = 'manual';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Ошибка переключения режима стабизизации');
+                if (currentMode === 'manual') {
+                    currentMode = 'stabilization';
+                } else {
+                    currentMode = 'manual';
+                }
+            });
+
         // Если переключаемся в Manual Mode, сбрасываем yawJoystick в центр
         if (currentMode === 'manual') {
             yawKnobX = yawCenterX;
@@ -480,7 +509,7 @@
 
     // Function to send PID settings via HTTP POST request
     function savePIDSettings() {
-        const pidSettings = {kp: pGain, ki: iGain, kd: dGain};
+        const pidSettings = {p: pGain, i: iGain, d: dGain};
 
         fetch('/pid_settings', {
             method: 'POST',

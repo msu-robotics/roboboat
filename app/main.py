@@ -8,6 +8,8 @@ from boat_controller import BoatController
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from enum import Enum
 
 
 app = FastAPI()
@@ -48,8 +50,7 @@ async def telemetry_websocket(websocket: WebSocket):
             message = await websocket.receive_text()
             if message:
                 data = json.loads(message)
-                print(data)
-                speed_multiplier = int(data.get("speedMultiplier", 100)) / 100
+                speed_multiplier = int(data.get("speedMultiplier", 100))
                 forward = float(data.get("forward", 0)) * speed_multiplier
                 lateral = float(data.get("lateral", 0)) * speed_multiplier
                 yaw = float(data.get("yaw", 0)) * speed_multiplier
@@ -58,6 +59,47 @@ async def telemetry_websocket(websocket: WebSocket):
         print("Connection closed")
     finally:
         await websocket.close()
+
+
+class ModeRequest(BaseModel):
+    mode: str
+
+
+@app.post('/mode')
+async def telemetry_websocket(mode_request: ModeRequest):
+    """
+    Конечная точка для переключения режима работы лодки
+    """
+    if mode_request.mode == 'manual':
+        boat_controller.send_mode_command(0)
+    else:
+        boat_controller.send_mode_command(1)
+
+
+class PidSettings(BaseModel):
+    p: float
+    i: float
+    d: float
+
+
+@app.post('/pid_settings')
+async def telemetry_websocket(pid_settings: PidSettings):
+    """
+    Конечная точка установки значений пид регулятора
+    """
+    boat_controller.send_pid_command(pid_settings.p, pid_settings.i, pid_settings.d)
+
+
+@app.get('/pid_settings', response_model=PidSettings)
+async def get_pid_settings(request: Request):
+    """
+    Конечная точка для получения значений пид регулятора
+    """
+    return PidSettings(
+        p = boat_controller.telemetry_data['pid']['p'],
+        i = boat_controller.telemetry_data['pid']['i'],
+        d = boat_controller.telemetry_data['pid']['d']
+    )
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
