@@ -316,6 +316,10 @@
                 <div class="pwm-value">Двигатель 3: <span id="pwm3">—</span> μs</div>
                 <div class="pwm-value">Двигатель 4: <span id="pwm4">—</span> μs</div>
             </div>
+            <h2>Питание бортовое</h2>
+            <div class="pwm-values">
+                <div class="pwm-value">Напряжение: <span id="voltage">—</span> v</div>
+            </div>
         </div>
     </div>
 </div>
@@ -754,6 +758,14 @@
         if (data.motor_pwms && Array.isArray(data.motor_pwms)) {
             updatePWMValues(data.motor_pwms);
         }
+
+        // Обновляем значения напряжения
+        let voltageElement = document.getElementById('voltage');
+            if (voltageElement) {
+                let adc_value = data && data.adc_value;
+                voltageElement.innerText = adc_value.toFixed(2);
+            }
+
     };
 
     // Устанавливаем периодическое обновление компаса
