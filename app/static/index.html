@@ -186,19 +186,47 @@
         #pwmWidget h2 {
             margin-bottom: 10px;
         }
+
         .pwm-values {
             display: flex;
             justify-content: space-around;
             flex-wrap: wrap;
         }
+
         .pwm-value {
             margin: 10px;
             font-size: 18px;
             color: #333;
         }
+
         .pwm-value span {
             font-weight: bold;
             color: #007BFF; /* Синий цвет по умолчанию */
+        }
+
+        /* Стили для кнопок управления пробоотборником */
+        #probeUpBtn, #probeDownBtn, #probeStopBtn {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #007BFF;
+            color: #fff;
+            transition: background-color 0.3s;
+        }
+
+        #probeUpBtn:hover, #probeDownBtn:hover {
+            background-color: #0056b3;
+        }
+
+        #probeStopBtn {
+            background-color: #dc3545;
+        }
+
+        #probeStopBtn:hover {
+            background-color: #c82333;
         }
 
 
@@ -261,6 +289,20 @@
             <div id="modeSwitch">
                 <button id="stabilizationModeBtn" onclick="setMode('stabilization')">Stabilization Mode</button>
                 <button id="manualModeBtn" onclick="setMode('manual')">Manual Mode</button>
+            </div>
+        </div>
+
+        <!-- Управление пробоотборником -->
+        <div class="control-section">
+            <h2>Управление пробоотборником</h2>
+            <div>
+                <button id="probeUpBtn" onclick="moveProbe('up')">Вверх</button>
+                <button id="probeDownBtn" onclick="moveProbe('down')">Вниз</button>
+                <button id="probeStopBtn" onclick="stopProbe()">Стоп</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <label for="probeTimeout">Таймаут (секунды):</label>
+                <input type="number" id="probeTimeout" min="1" max="60" value="10" step="1">
             </div>
         </div>
 
@@ -369,27 +411,72 @@
     let headingDisplay = document.getElementById('headingValue');
 
     // Переменные для хранения последних значений джойстиков
-        let lastJoystickSendTime = 0;
-        let joystickInterval = 100; // Интервал в миллисекундах (100 ms = 10 Hz)
-        let joystickData = {
-            forward: 0,
-            lateral: 0,
-            yaw: 0
-        };
+    let lastJoystickSendTime = 0;
+    let joystickInterval = 100; // Интервал в миллисекундах (100 ms = 10 Hz)
+    let joystickData = {
+        forward: 0,
+        lateral: 0,
+        yaw: 0
+    };
 
     // Функция для отправки данных джойстика с ограничением частоты
-        function sendJoystickData() {
-            let now = Date.now();
-            if (now - lastJoystickSendTime >= joystickInterval) {
-                control_ws.send(JSON.stringify({
-                    forward: joystickData.forward,
-                    lateral: joystickData.lateral,
-                    yaw: joystickData.yaw,
-                    speedMultiplier: speedMultiplier
-                }));
-                lastJoystickSendTime = now;
-            }
+    function sendJoystickData() {
+        let now = Date.now();
+        if (now - lastJoystickSendTime >= joystickInterval) {
+            control_ws.send(JSON.stringify({
+                forward: joystickData.forward,
+                lateral: joystickData.lateral,
+                yaw: joystickData.yaw,
+                speedMultiplier: speedMultiplier
+            }));
+            lastJoystickSendTime = now;
         }
+    }
+
+    // Функция для управления пробоотборником
+    function moveProbe(direction) {
+        let timeout = parseInt(document.getElementById('probeTimeout').value) || 0; // Значение по умолчанию 0 секунд
+        fetch('/probe_control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({'action': direction, 'timeout': timeout})
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Команда отправлена успешно.');
+            } else {
+                alert('Ошибка при отправке команды.');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Ошибка при отправке команды.');
+        });
+    }
+
+    // Функция для экстренной остановки пробоотборника
+    function stopProbe() {
+        fetch('/probe_control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({'action': 'stop'})
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Команда остановки отправлена успешно.');
+            } else {
+                alert('Ошибка при отправке команды остановки.');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Ошибка при отправке команды остановки.');
+        });
+    }
 
     // Обновление скорости слайдера
     function updateSpeed() {
@@ -761,10 +848,10 @@
 
         // Обновляем значения напряжения
         let voltageElement = document.getElementById('voltage');
-            if (voltageElement) {
-                let adc_value = data && data.adc_value;
-                voltageElement.innerText = adc_value.toFixed(2);
-            }
+        if (voltageElement) {
+            let adc_value = data && data.adc_value;
+            voltageElement.innerText = adc_value.toFixed(2);
+        }
 
     };
 
@@ -773,7 +860,7 @@
         updateMagnetometer(currentMx);
     }, 100); // Обновляем каждые 100 миллисекунд
 
-        function updatePWMValues(pwmValues) {
+    function updatePWMValues(pwmValues) {
         for (let i = 0; i < pwmValues.length; i++) {
             let pwmElement = document.getElementById('pwm' + (i + 1));
             if (pwmElement) {

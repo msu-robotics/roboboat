@@ -4,10 +4,12 @@ import time
 import threading
 import os
 import uvicorn
+from websockets.asyncio.async_timeout import timeout
+
 from boat_controller import BoatController
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from enum import Enum
 
@@ -64,6 +66,28 @@ async def telemetry_websocket(websocket: WebSocket):
 class ModeRequest(BaseModel):
     mode: str
 
+
+class ProbeAction(BaseModel):
+    action: str
+    timeout: int = 0
+
+
+@app.post('/probe_control')
+def probe_control(action_data: ProbeAction):
+    action = action_data.action
+    timeout = action_data.timeout  # Значение по умолчанию 10 секунд
+
+    # Проверяем действие и отправляем соответствующую команду на ESP32
+    if action == 'up':
+        boat_controller.send_probe_command(1, timeout)
+    elif action == 'down':
+        boat_controller.send_probe_command(2, timeout)
+    elif action == 'stop':
+        boat_controller.send_probe_command(3)
+    else:
+        return JSONResponse({'status': 'error', 'message': 'Invalid action'}), 400
+
+    return JSONResponse({'status': 'success'}), 200
 
 @app.post('/mode')
 async def telemetry_websocket(mode_request: ModeRequest):

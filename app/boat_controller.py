@@ -11,6 +11,7 @@ CMD_TELEMETRY = 0x03  # Заголовок для телеметрии (испо
 CMD_LED = 0x04        # Команда для управления LED-лентой
 CMD_GPIO = 0x05       # Команда для управления GPIO пином
 CMD_MODE = 0x06       # Команда для переключения режима работы
+CMD_PROBE_CONTROL = 0x07  # Команда для управления пробоотборником
 
 # Форматы пакетов
 # Команда движения: заголовок (1 байт) + forward (float) + lateral (float) + yaw (float)
@@ -31,6 +32,10 @@ GPIO_CMD_STRUCT = 'BB'    # B: unsigned char
 
 # Команда режима: заголовок (1 байт) + режим (1 байт)
 MODE_CMD_STRUCT = 'BB'    # B: unsigned char
+
+# Команда управления пробоотборником: заголовок (1 байт) + действие (1 байт) + таймаут (2 байта, unsigned short)
+PROBE_CONTROL_STRUCT = 'BBH'  # B: unsigned char, H: unsigned short (для таймаута в секундах)
+
 
 class BoatController:
     def __init__(self, esp32_ip, esp32_port=5005, local_port=5006):
@@ -214,6 +219,16 @@ class BoatController:
         :param d_gain: Дифференциальный коэффициент (float)
         """
         packet = struct.pack(PID_CMD_STRUCT, CMD_PID, p_gain, i_gain, d_gain)
+        self.command_queue.put(packet)
+
+    def send_probe_command(self, direction, timeout=0):
+        """
+        Отправить команду на пробоотборник
+
+        :param direction: Направление движения (int) 1-up 2-down 3-stop
+        :param timeout: Время в секундах до остановки(int)
+        """
+        packet = struct.pack(PROBE_CONTROL_STRUCT, CMD_PROBE_CONTROL, direction, timeout)
         self.command_queue.put(packet)
 
     def send_led_command(self, mode, r, g, b):
