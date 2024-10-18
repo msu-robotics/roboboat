@@ -60,6 +60,7 @@ class BoatController:
 
         self.telemetry_thread = None
         self.telemetry_running = False
+        self.target_heading = 0
 
         # Хранение состояния телеметрии
         self.telemetry_data = {
@@ -198,6 +199,13 @@ class BoatController:
         with self.lock:
             return self.telemetry_data.copy()
 
+    def get_current_yaw(self):
+        return self.telemetry_data['yaw']
+
+    def set_target_heading(self, heading):
+        with self.lock:
+            self.target_heading = heading
+
     def send_movement_command(self, forward_speed, lateral_speed, yaw_speed):
         """
         Установить текущие скорости движения лодки.
@@ -206,6 +214,8 @@ class BoatController:
         :param lateral_speed: Скорость вбок (float)
         :param yaw_speed: Скорость поворота (float)
         """
+        if yaw_speed == 0 and self.mode:
+            yaw_speed = self.target_heading
         with self.lock:
             self.current_forward_speed = forward_speed
             self.current_lateral_speed = lateral_speed
