@@ -1018,6 +1018,7 @@
         let voltageElement = document.getElementById('voltage');
         if (voltageElement) {
             let adc_value = data && data.adc_value;
+            adc_value = adc_value * 0.007
             voltageElement.innerText = adc_value.toFixed(2);
         }
 
