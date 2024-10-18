@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from queue import Queue
 from enum import Enum
 
 
@@ -29,6 +30,7 @@ os.makedirs(MISSION_FOLDER, exist_ok=True)
 mission_thread = None
 mission_running = False
 mission_output = []
+mission_queue = Queue()
 
 
 # Маршрут для получения телеметрии
@@ -168,18 +170,18 @@ async def start_mission():
         spec = importlib.util.spec_from_file_location("mission_module", os.path.join(MISSION_FOLDER, 'mission.py'))
         mission_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mission_module)
-        mission_instance = mission_module.Mission(boat_controller, mission_running, log_mission_output)
+        mission_instance = mission_module.Mission(boat_controller, mission_queue, log_mission_output)
         mission_thread = threading.Thread(target=mission_instance.run)
         mission_thread.start()
         return JSONResponse(content={"status": "success"}, status_code=200)
     except Exception as e:
-
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 # Конечная точка для остановки миссии
 @app.post("/stop_mission")
 async def stop_mission():
     global mission_running
+    mission_queue.put(True)
     if mission_running:
         mission_running = False
         return JSONResponse(content={"status": "success"}, status_code=200)
@@ -203,6 +205,8 @@ async def mission_output_ws(websocket: WebSocket):
             await asyncio.sleep(0.1)
     except WebSocketDisconnect:
         print("Клиент отключился от mission_output_ws")
+    except Exception as e:
+        print(e)
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
