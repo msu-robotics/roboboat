@@ -485,11 +485,18 @@
     // Функция для отправки данных джойстика с ограничением частоты
     function sendJoystickData() {
         let now = Date.now();
+
+        if (currentMode === 'stabilization') {
+            setYawAngle = joystickData.yaw * 180;
+        } else {
+            setYawAngle = joystickData.yaw;
+        }
+
         if (now - lastJoystickSendTime >= joystickInterval) {
             control_ws.send(JSON.stringify({
                 forward: joystickData.forward,
                 lateral: joystickData.lateral,
-                yaw: joystickData.yaw,
+                yaw: setYawAngle,
                 speedMultiplier: speedMultiplier
             }));
             lastJoystickSendTime = now;
@@ -978,6 +985,8 @@
         } else {
             setYawAngle = null; // В ручном режиме не сохраняем установленный угол
         }
+        console.log({'yawKnobX': yawKnobX, 'yawValue': yawValue, 'setYawAngle': setYawAngle, 'joystickData.yaw': joystickData.yaw})
+
         joystickData.yaw = yawValue;
         drawYawJoystick();
         updateMagnetometer(currentMx);

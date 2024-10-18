@@ -66,7 +66,7 @@ async def telemetry_websocket(websocket: WebSocket):
                 speed_multiplier = int(data.get("speedMultiplier", 100))
                 forward = float(data.get("forward", 0)) * speed_multiplier
                 lateral = float(data.get("lateral", 0)) * speed_multiplier
-                yaw = float(data.get("yaw", 0)) * speed_multiplier
+                yaw = float(data.get("yaw", 0)) * speed_multiplier if not boat_controller.mode else float(data.get("yaw", 0))
                 boat_controller.send_movement_command(forward, lateral, yaw)
     except Exception as e:
         print("Connection closed")

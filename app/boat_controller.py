@@ -77,6 +77,7 @@ class BoatController:
         self.current_yaw_speed = 0.0
 
         self.lock = threading.Lock()
+        self.mode = 0
 
         # Очередь команд
         self.command_queue = queue.Queue()
@@ -259,6 +260,7 @@ class BoatController:
         :param mode: Режим работы (0: ручной, 1: стабилизация)
         """
         packet = struct.pack(MODE_CMD_STRUCT, CMD_MODE, mode)
+        self.mode = mode
         self.command_queue.put(packet)
 
     def close(self):
