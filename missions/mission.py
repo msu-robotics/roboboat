@@ -8,6 +8,7 @@ class VehicleProxy:
         self.vehicle = vehicle
         self.mission_queue = mission_queue
         self.log_mission_output = log_mission_output
+        self.vehicle.is_running = False
 
     def __getattribute__(self, name):
         if name in ['mission_queue', 'log_mission_output', 'vehicle']:
@@ -20,9 +21,10 @@ class VehicleProxy:
         except Exception as e:
             is_mission_stop = None
 
-        if is_mission_stop is not None and is_mission_stop:
-            self.log_mission_output('Миссия была завершена или не запущена')
-            raise ValueError('Миссия была завершена или не запущена')
+        if is_mission_stop is not None and is_mission_stop and self.vehicle.is_running:
+            self.vehicle.send_movement_command(0.0, 0.0, 0.0)
+            self.vehicle.send_mode_command(0)
+            raise ValueError(f'Миссия была завершена или не запущена {is_mission_stop}')
 
         return attr
 
@@ -38,8 +40,10 @@ class Mission:
 
         try:
             self.log_mission_output("Запуск миссии")
+            self.boat_controller.is_running = True
             self._run()
         except Exception as e:
+            self.boat_controller.is_running = False
             self.log_mission_output(str(traceback.format_exc()))
             self.boat_controller.send_movement_command(0.0, 0.0, 0.0)
 
@@ -48,29 +52,37 @@ class Mission:
         self.log_mission_output("Переключение в режим стабилизации.")
         self.boat_controller.send_mode_command(1)
 
+        self.log_mission_output("Устанавливаем позицию по курсу")
+        self.boat_controller.set_target_heading(self.boat_controller.get_current_yaw())
+
+        self.log_mission_output("Движение прямо")
+        self.boat_controller.send_movement_command(20.0, 0.0, 0)
+        time.sleep(10)
+
         # Получение текущего курса от IMU аппарата
-        self.current_heading = self.boat_controller.get_current_yaw()
-        self.log_mission_output(f"Текущий курс: {self.current_heading:.2f} градусов")
-
-        # Поворот на 90 градусов против часовой стрелки
-        self.log_mission_output("Поворот на 90 градусов против часовой стрелки.")
-        self.rotate_relative(-90.0)
-
-        # Движение по окружности вокруг буя
-        linear_speed = 10.0  # Скорость движения вперед (%)
-        circle_duration = 30.0  # Время выполнения полного оборота (секунды)
-        self.log_mission_output("Начало движения по окружности вокруг буя.")
-        self.circle_around_buoy(linear_speed, circle_duration)
-
-        # Поворот на 90 градусов по часовой стрелке для возвращения к исходному курсу
-        self.log_mission_output("Поворот на 90 градусов по часовой стрелке для возвращения к исходному курсу.")
-        self.rotate_relative(90.0)
+        # self.current_heading = self.boat_controller.get_current_yaw()
+        # self.log_mission_output(f"Текущий курс: {self.current_heading:.2f} градусов")
+        #
+        # # Поворот на 90 градусов против часовой стрелки
+        # self.log_mission_output("Поворот на 90 градусов против часовой стрелки.")
+        # self.rotate_relative(-90.0)
+        #
+        # # Движение по окружности вокруг буя
+        # linear_speed = 10.0  # Скорость движения вперед (%)
+        # circle_duration = 30.0  # Время выполнения полного оборота (секунды)
+        # self.log_mission_output("Начало движения по окружности вокруг буя.")
+        # self.circle_around_buoy(linear_speed, circle_duration)
+        #
+        # # Поворот на 90 градусов по часовой стрелке для возвращения к исходному курсу
+        # self.log_mission_output("Поворот на 90 градусов по часовой стрелке для возвращения к исходному курсу.")
+        # self.rotate_relative(90.0)
 
         # Останавливаем аппарата после завершения миссии
-        self.boat_controller.send_movement_command(0.0, 0.0, 0.0)
+
 
         self.log_mission_output("Переключение в ручной режим.")
         self.boat_controller.send_mode_command(0)
+        self.boat_controller.send_movement_command(0.0, 0.0, 0.0)
 
         self.log_mission_output("Миссия завершена.")
 

@@ -214,7 +214,7 @@ class BoatController:
         :param lateral_speed: Скорость вбок (float)
         :param yaw_speed: Скорость поворота (float)
         """
-        if yaw_speed == 0 and self.mode:
+        if self.mode:
             yaw_speed = self.target_heading
         with self.lock:
             self.current_forward_speed = forward_speed

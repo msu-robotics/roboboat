@@ -18,7 +18,7 @@ from enum import Enum
 app = FastAPI()
 
 # Создаем экземпляр BoatController
-ESP32_IP = '192.168.43.222'
+ESP32_IP = '192.168.43.10'
 boat_controller = BoatController(esp32_ip=ESP32_IP)
 boat_controller.start()
 
@@ -57,6 +57,7 @@ async def telemetry_websocket(websocket: WebSocket):
     """
     Веб-сокет для управления аппаратом в реальном времени.
     """
+    global mission_running
     await websocket.accept()
     try:
         while True:
@@ -67,7 +68,8 @@ async def telemetry_websocket(websocket: WebSocket):
                 forward = float(data.get("forward", 0)) * speed_multiplier
                 lateral = float(data.get("lateral", 0)) * speed_multiplier
                 yaw = float(data.get("yaw", 0)) * speed_multiplier if not boat_controller.mode else float(data.get("yaw", 0))
-                boat_controller.send_movement_command(forward, lateral, yaw)
+                if not mission_running:
+                    boat_controller.send_movement_command(forward, lateral, yaw)
     except Exception as e:
         print("Connection closed")
     finally:
@@ -170,6 +172,7 @@ async def start_mission():
         spec = importlib.util.spec_from_file_location("mission_module", os.path.join(MISSION_FOLDER, 'mission.py'))
         mission_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mission_module)
+        mission_queue.put(False)
         mission_instance = mission_module.Mission(boat_controller, mission_queue, log_mission_output)
         mission_thread = threading.Thread(target=mission_instance.run)
         mission_thread.start()
@@ -182,11 +185,11 @@ async def start_mission():
 async def stop_mission():
     global mission_running
     mission_queue.put(True)
-    if mission_running:
-        mission_running = False
-        return JSONResponse(content={"status": "success"}, status_code=200)
-    else:
-        return JSONResponse(content={"status": "error", "message": "No mission is running"}, status_code=400)
+    boat_controller.send_mode_command(0)
+    boat_controller.send_movement_command(0.0, 0.0, 0.0)
+    mission_running = False
+    return JSONResponse(content={"status": "success"}, status_code=200)
+
 
 # WebSocket для передачи вывода миссии на клиент
 from fastapi import WebSocket
